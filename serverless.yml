@@ -1,15 +1,54 @@
-service: serverless-simple-http-endpoint
+service: gocd-usage-data-collector
 
 frameworkVersion: ">=1.1.0 <2.0.0"
 
 provider:
   name: aws
-  runtime: nodejs4.3
+  runtime: nodejs6.10
+  environment:
+    REMOTE_GOCD_SERVER_USAGE_DATA_TABLE: ${self:service}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.REMOTE_GOCD_SERVER_USAGE_DATA_TABLE}"
 
 functions:
-  currentTime:
-    handler: handler.endpoint
+  addUsageData:
+    handler: functions/addUsageData_v1.add
     events:
       - http:
-          path: ping
+          path: /add/v1
+          method: post
+          cors: true
+  listUsageData:
+    handler: functions/listUsageData.list
+    events:
+      - http:
+          path: /
           method: get
+          cors: true
+
+
+resources:
+  Resources:
+    TodosDynamoDbTable:
+      Type: 'AWS::DynamoDB::Table'
+      # Ganeshpl should change the DeletionPolicy to Retain after the spike
+      DeletionPolicy: Delete
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: id
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:service}
